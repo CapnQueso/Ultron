@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Voxel Engine - Main entry point
-Step 1: Window & Camera Setup
+Step 2: Window, Camera, and Basic Block Rendering
 """
 
 import pygame
@@ -9,7 +9,10 @@ from pygame.locals import *
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGL.GLUT import *
+
 from voxel_engine.camera import Camera
+from voxel_engine.chunk import Chunk
 
 def main():
     """Initialize pygame and create window"""
@@ -33,6 +36,12 @@ def main():
     # Create camera
     camera = Camera()
     
+    # Initialize chunks
+    chunks = {}
+    for cx in range(-2, 3):
+        for cz in range(-2, 3):
+            chunks[(cx, cz)] = Chunk(cx, cz)
+    
     # Game loop
     clock = pygame.time.Clock()
     running = True
@@ -47,6 +56,11 @@ def main():
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     running = False
+                elif event.key == K_f:
+                    # Toggle fullscreen
+                    pygame.display.toggle_fullscreen()
+            elif event.type == MOUSEMOTION:
+                camera.handle_input(event)
         
         # Update camera
         camera.update(60)
@@ -58,51 +72,76 @@ def main():
         glLoadIdentity()
         camera.apply()
         
-        # Draw some debug cubes to verify 3D rendering
-        draw_debug_scene()
+        # Draw visible chunks
+        draw_chunks(chunks, camera.position)
+        
+        # Draw debug info
+        draw_debug_info(camera.position, clock.get_fps())
         
         pygame.display.flip()
     
     pygame.quit()
 
-def draw_debug_scene():
-    """Draw a simple debug scene with cubes"""
-    glPushMatrix()
+def draw_chunks(chunks, camera_pos):
+    """Draw all visible chunks"""
+    # Simple visibility culling: draw all chunks within range
+    render_distance = 3
     
-    # Draw a cube at origin
-    draw_cube(-2, -1, 0)
-    
-    # Draw another cube
-    draw_cube(2, -1, 0)
-    
-    glPopMatrix()
+    for (cx, cz), chunk in chunks.items():
+        # Calculate chunk center position
+        chunk_x = cx * Chunk.CHUNK_SIZE + Chunk.CHUNK_SIZE / 2
+        chunk_z = cz * Chunk.CHUNK_SIZE + Chunk.CHUNK_SIZE / 2
+        
+        # Distance check
+        dist = ((chunk_x - camera_pos.x) ** 2 + (chunk_z - camera_pos.z) ** 2) ** 0.5
+        if dist > render_distance * Chunk.CHUNK_SIZE:
+            continue
+        
+        # Draw chunk blocks
+        draw_chunk(chunk, cx * Chunk.CHUNK_SIZE, cz * Chunk.CHUNK_SIZE)
 
-def draw_cube(x, y, z, color=(1.0, 0.5, 0.0)):
-    """Draw a simple colored cube"""
-    glColor3f(*color)
+def draw_chunk(chunk, world_x: int, world_z: int):
+    """Draw all blocks in a chunk"""
+    for x in range(chunk.CHUNK_SIZE):
+        for y in range(chunk.CHUNK_HEIGHT):
+            for z in range(chunk.CHUNK_SIZE):
+                block = chunk.get_block(x, y, z)
+                if not block.is_air():
+                    draw_block(block, world_x + x, world_y := y, world_z + z)
+
+def draw_block(block, x: int, y: int, z: int):
+    """Draw a single block at world coordinates"""
+    glColor4f(*block.get_color())
     
+    # Define cube vertices (1x1x1 cube centered at x,y,z)
     vertices = [
         # Front face
-        (x-1, y-1, z+1), (x+1, y-1, z+1), (x+1, y+1, z+1), (x-1, y+1, z+1),
+        (x-0.5, y-0.5, z+0.5), (x+0.5, y-0.5, z+0.5), 
+        (x+0.5, y+0.5, z+0.5), (x-0.5, y+0.5, z+0.5),
         # Back face
-        (x-1, y-1, z-1), (x-1, y+1, z-1), (x+1, y+1, z-1), (x+1, y-1, z-1),
+        (x-0.5, y-0.5, z-0.5), (x-0.5, y+0.5, z-0.5), 
+        (x+0.5, y+0.5, z-0.5), (x+0.5, y-0.5, z-0.5),
         # Top face
-        (x-1, y+1, z-1), (x+1, y+1, z-1), (x+1, y+1, z+1), (x-1, y+1, z+1),
+        (x-0.5, y+0.5, z-0.5), (x+0.5, y+0.5, z-0.5), 
+        (x+0.5, y+0.5, z+0.5), (x-0.5, y+0.5, z+0.5),
         # Bottom face
-        (x-1, y-1, z-1), (x-1, y-1, z+1), (x+1, y-1, z+1), (x+1, y-1, z-1),
+        (x-0.5, y-0.5, z-0.5), (x-0.5, y-0.5, z+0.5), 
+        (x+0.5, y-0.5, z+0.5), (x+0.5, y-0.5, z-0.5),
         # Right face
-        (x+1, y-1, z-1), (x+1, y+1, z-1), (x+1, y+1, z+1), (x+1, y-1, z+1),
+        (x+0.5, y-0.5, z-0.5), (x+0.5, y+0.5, z-0.5), 
+        (x+0.5, y+0.5, z+0.5), (x+0.5, y-0.5, z+0.5),
         # Left face
-        (x-1, y-1, z-1), (x-1, y-1, z+1), (x-1, y+1, z+1), (x-1, y+1, z-1),
+        (x-0.5, y-0.5, z-0.5), (x-0.5, y-0.5, z+0.5), 
+        (x-0.5, y+0.5, z+0.5), (x-0.5, y+0.5, z-0.5),
     ]
     
     faces = [
-        (0, 1, 2, 3),
-        (4, 5, 6, 7),
-        (8, 9, 10, 11),
-        (12, 13, 14, 15),
-        (16, 17, 18, 19),
-        (20, 21, 22, 23),
+        (0, 1, 2, 3),   # Front
+        (4, 5, 6, 7),   # Back
+        (8, 9, 10, 11), # Top
+        (12, 13, 14, 15), # Bottom
+        (16, 17, 18, 19), # Right
+        (20, 21, 22, 23), # Left
     ]
     
     glBegin(GL_QUADS)
@@ -110,6 +149,11 @@ def draw_cube(x, y, z, color=(1.0, 0.5, 0.0)):
         for vertex in face:
             glVertex3f(*vertices[vertex])
     glEnd()
+
+def draw_debug_info(pos, fps):
+    """Draw debug information"""
+    # Could add text rendering here in later steps
+    pass
 
 if __name__ == "__main__":
     main()
