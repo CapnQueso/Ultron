@@ -1,6 +1,6 @@
 """
 Voxel Engine Main Entry Point
-Step 2: Block creation/destruction grid and chunk generation pipeline
+Step 3: Player physics (bounding boxes, collision, gravity, jumping)
 Author: Ultron-Prime
 """
 from ursina import *
@@ -101,9 +101,6 @@ def update_chunks():
             chunk_entities[(cx, cz)].destroy()
         del chunks[(cx, cz)]
         del chunk_entities[(cx, cz)]
-
-# Initial chunk loading
-update_chunks()
 
 # Block interaction logic
 selected_block = GRASS_ID
@@ -217,11 +214,12 @@ test_block = Entity(
 # Add update functions to Ursina
 def update():
     """Main update loop."""
+    player.update(chunks, chunk_entities)
     update_chunks()
     update_block_interaction()
     update_ui()
 
-print("STEP 2 INITIALIZED: Engine running with chunk generation and block interaction. WASD to move, Space to jump, Mouse to look, Left-click to break, Right-click to place, 1-3 to select block.")
+print("STEP 3 INITIALIZED: Engine running with player physics (collision, gravity, jumping). WASD to move, Space to jump, Mouse to look, Left-click to break, Right-click to place, 1-3 to select block.")
 
 # Run the app
 app.run()
